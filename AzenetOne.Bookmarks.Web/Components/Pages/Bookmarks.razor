@@ -1,0 +1,229 @@
+@page "/bookmarks"
+@rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@using AzenetOne.Bookmarks.Core.Entities
+@using AzenetOne.Bookmarks.Core.Services
+@inject IBookmarkManager BookmarkManager
+
+<PageTitle>Bookmarks</PageTitle>
+
+<h1>Bookmarks</h1>
+
+@if (!string.IsNullOrWhiteSpace(feedbackMessage))
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success")" role="alert">@feedbackMessage</div>
+}
+
+<EditForm Model="formModel" OnValidSubmit="HandleSubmitAsync" class="mb-4">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label class="form-label" for="title">Title</label>
+        <InputText id="title" class="form-control" @bind-Value="formModel.Title" />
+        <ValidationMessage For="() => formModel.Title" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="url">Url</label>
+        <InputText id="url" class="form-control" @bind-Value="formModel.Url" />
+        <ValidationMessage For="() => formModel.Url" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="description">Description</label>
+        <InputTextArea id="description" class="form-control" @bind-Value="formModel.Description" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="tags">Tags (comma separated)</label>
+        <InputText id="tags" class="form-control" @bind-Value="formModel.Tags" />
+    </div>
+
+    <button type="submit" class="btn btn-primary me-2">@(formModel.Id == 0 ? "Create" : "Update")</button>
+    @if (formModel.Id != 0)
+    {
+        <button type="button" class="btn btn-secondary" @onclick="ResetForm">Cancel Edit</button>
+    }
+</EditForm>
+
+@if (bookmarks.Count == 0)
+{
+    <p>No bookmarks yet.</p>
+}
+else
+{
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Url</th>
+                <th>Description</th>
+                <th>Tags</th>
+                <th class="text-end">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var bookmark in bookmarks)
+            {
+                var pendingDelete = bookmark.Id == pendingDeleteId;
+                <tr>
+                    <td>@bookmark.Title</td>
+                    <td><a href="@bookmark.Url" target="_blank" rel="noopener noreferrer">@bookmark.Url</a></td>
+                    <td>@bookmark.Description</td>
+                    <td>@bookmark.Tags</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => EditBookmark(bookmark)">Edit</button>
+                        @if (!pendingDelete)
+                        {
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RequestDelete(bookmark.Id)">Delete</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-danger me-2" @onclick="() => ConfirmDeleteAsync(bookmark.Id)">Confirm</button>
+                            <button class="btn btn-sm btn-secondary" @onclick="CancelDelete">Cancel</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private readonly List<Bookmark> bookmarks = [];
+    private BookmarkFormModel formModel = new();
+    private int? pendingDeleteId;
+    private string? feedbackMessage;
+    private bool isError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task HandleSubmitAsync()
+    {
+        try
+        {
+            if (formModel.Id == 0)
+            {
+                await BookmarkManager.CreateAsync(formModel.ToEntity());
+                SetFeedback("Bookmark created.", error: false);
+            }
+            else
+            {
+                await BookmarkManager.UpdateAsync(formModel.ToEntity());
+                SetFeedback("Bookmark updated.", error: false);
+            }
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            SetFeedback(ex.Message, error: true);
+        }
+    }
+
+    private void EditBookmark(Bookmark bookmark)
+    {
+        formModel = BookmarkFormModel.FromEntity(bookmark);
+        pendingDeleteId = null;
+        ClearFeedback();
+    }
+
+    private void RequestDelete(int id)
+    {
+        pendingDeleteId = id;
+        ClearFeedback();
+    }
+
+    private async Task ConfirmDeleteAsync(int id)
+    {
+        try
+        {
+            await BookmarkManager.DeleteAsync(id);
+            pendingDeleteId = null;
+            SetFeedback("Bookmark deleted.", error: false);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            SetFeedback(ex.Message, error: true);
+        }
+    }
+
+    private void CancelDelete()
+    {
+        pendingDeleteId = null;
+    }
+
+    private void ResetForm()
+    {
+        formModel = new BookmarkFormModel();
+        pendingDeleteId = null;
+    }
+
+    private async Task LoadAsync()
+    {
+        bookmarks.Clear();
+        bookmarks.AddRange(await BookmarkManager.ListAsync());
+    }
+
+    private void SetFeedback(string message, bool error)
+    {
+        feedbackMessage = message;
+        isError = error;
+    }
+
+    private void ClearFeedback()
+    {
+        feedbackMessage = null;
+        isError = false;
+    }
+
+    private sealed class BookmarkFormModel
+    {
+        public int Id { get; set; }
+
+        [Required]
+        [StringLength(200)]
+        public string Title { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(2048)]
+        [RegularExpression("^https?://.+", ErrorMessage = "Url must start with http:// or https://")]
+        public string Url { get; set; } = string.Empty;
+
+        [StringLength(2000)]
+        public string? Description { get; set; }
+
+        [StringLength(1000)]
+        public string? Tags { get; set; }
+
+        public Bookmark ToEntity()
+        {
+            return new Bookmark
+            {
+                Id = Id,
+                Title = Title,
+                Url = Url,
+                Description = Description,
+                Tags = Tags
+            };
+        }
+
+        public static BookmarkFormModel FromEntity(Bookmark bookmark)
+        {
+            return new BookmarkFormModel
+            {
+                Id = bookmark.Id,
+                Title = bookmark.Title,
+                Url = bookmark.Url,
+                Description = bookmark.Description,
+                Tags = bookmark.Tags
+            };
+        }
+    }
+}

@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="AzenetOne.Bookmarks.Core/AzenetOne.Bookmarks.Core.csproj" />
+  <Project Path="AzenetOne.Bookmarks.Tests/AzenetOne.Bookmarks.Tests.csproj" />
+  <Project Path="AzenetOne.Bookmarks.Web/AzenetOne.Bookmarks.Web.csproj" />
+  <Project Path="AzenetOne.Bookmarks/AzenetOne.Bookmarks.csproj" />
+</Solution>
