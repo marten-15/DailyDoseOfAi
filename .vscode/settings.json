@@ -4,6 +4,11 @@
         "git rev-parse": true,
         "git init": true,
         "git add": true,
-        "git commit": true
+        "git commit": true,
+        "gh": true,
+        "Get-Command": true,
+        "git config": true,
+        "winget": true,
+        "&": true
     }
 }
